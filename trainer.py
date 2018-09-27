@@ -1,18 +1,23 @@
+import cv2
+import glob
 from random import randint
-
 from keras.callbacks import EarlyStopping, ModelCheckpoint, TensorBoard
-from comparator.comparator import Comparator
-from feature_vector.feature_vector import FeatureVector
 import numpy as np
 import sklearn
 from sklearn.model_selection import train_test_split
-import  os
+import os
 from collections import OrderedDict
 import itertools
-from utils import utils
+from feature_extraction.mars_api.mars_api import MarsExtractorAPI
+from feature_vector_comparator.comparator.comparator import Comparator
+from feature_vector_comparator.feature_vector.feature_vector import FeatureVector
+from tf_session.tf_session_runner import SessionRunner
+from tf_session.tf_session_utils import Inference
 
 count_0 = 0
 count_1 = 0
+
+
 def generator(samples, batch_size=32):
     num_samples = len(samples)
     while True:
@@ -35,6 +40,7 @@ def generator(samples, batch_size=32):
 
             yield [np.expand_dims(X_train1, 0), np.expand_dims(X_train2, 0)], np.expand_dims(Y_train, 0)
 
+
 def create_samples(vector):
     global count_0
     global count_1
@@ -56,13 +62,40 @@ def create_samples(vector):
     return samples
 
 
-if __name__ == '__main__':
-    #data = utils.read_csv('extras/data.csv')
+def extract_features(patch, ip, op):
+    patch[0] = cv2.equalizeHist(patch[0])
+    patch[1] = cv2.equalizeHist(patch[1])
+    patch[2] = cv2.equalizeHist(patch[2])
+    ip.push(Inference(patch, meta_dict={}))
+    op.wait()
+    ret, feature_inference = op.pull()
+    if ret:
+        return feature_inference.get_result()
+
+
+# if __name__ == '__main__':
+def train():
     feature_vector = FeatureVector()
-    #for idx, vec in data:
-    #    feature_vector.add_vector(idx, vec)
-    for x in range(200):
-        feature_vector.add_vector(randint(0, 30), [randint(0, 128) for _ in range(128)])
+    session_runner = SessionRunner()
+    extractor = MarsExtractorAPI('mars_api', True)
+    ip = extractor.get_in_pipe()
+    op = extractor.get_out_pipe()
+    extractor.use_session_runner(session_runner)
+    session_runner.start()
+    extractor.run()
+
+    for id in range(1, 5):
+        image_files = glob.glob('/home/allahbaksh/Tailgating_detection/SecureIt/data/obj_tracking/outputs/patches/{}/*.jpg'.format(id))
+        for image_file in image_files:
+            patch = cv2.imread(image_file)
+            f_vec = extract_features(patch, ip, op)
+            # print(f_vec.shape)
+            # print(f_vec[])
+            # break
+            feature_vector.add_vector(id, f_vec[0])
+
+    # for x in range(200):
+    #     feature_vector.add_vector(randint(0, 30), [randint(0, 128) for _ in range(128)])
     samples = create_samples(feature_vector.get_vector_dict())
     print(count_0)
     print(count_1)
@@ -74,10 +107,10 @@ if __name__ == '__main__':
     # print(len(samples))
     train_samples, val_samples = train_test_split(samples, test_size=0.2)
 
-    train_generator = generator(train_samples)
-    validation_generator = generator(val_samples)
+    train_generator = generator(train_samples, batch_size=16)
+    validation_generator = generator(val_samples, batch_size=16)
     epoch = 10
-    saved_weights_name = './model.h5'
+    saved_weights_name = 'model.h5'
     early_stop = EarlyStopping(monitor='val_loss',
                                min_delta=0.001,
                                patience=3,
@@ -102,8 +135,40 @@ if __name__ == '__main__':
                         nb_val_samples = len(val_samples),
                         callbacks=[early_stop, checkpoint, tensorboard]
                         )
+    model.save_weights('new_weights.h5')
 
 
+def test():
+    model = Comparator()()
+    model.load_weights('model.h5')
+    model.summary()
+    feature_vector = FeatureVector()
+    session_runner = SessionRunner()
+    extractor = MarsExtractorAPI('mars_api', True)
+    ip = extractor.get_in_pipe()
+    op = extractor.get_out_pipe()
+    extractor.use_session_runner(session_runner)
+    session_runner.start()
+    extractor.run()
+    image_files = []
+    for id in range(1, 5):
+        image_files.append(glob.glob(
+            '/home/allahbaksh/Tailgating_detection/SecureIt/data/obj_tracking/outputs/patches/{}/*.jpg'.format(id)))
+    print(len(image_files))
+    patch0 = cv2.imread(image_files[0][randint(0, len(image_files[0]))])
+    patch0_1 = cv2.imread(image_files[0][randint(0, len(image_files[0]))])
+    patch1 = cv2.imread(image_files[1][randint(0, len(image_files[1]))])
+    patch2 = cv2.imread(image_files[2][randint(0, len(image_files[2]))])
+    patch3 = cv2.imread(image_files[3][randint(0, len(image_files[3]))])
+    f_vec0 = np.array(extract_features(patch0, ip, op))
+    f_vec0_1 = np.array(extract_features(patch0_1, ip, op))
+    f_vec1 = np.array(extract_features(patch1, ip, op))
+    f_vec2 = np.array(extract_features(patch2, ip, op))
+    f_vec3 = np.array(extract_features(patch3, ip, op))
+    #print(f_vec1)
 
+    output = model.predict([np.expand_dims(f_vec0, 0), np.expand_dims(f_vec0_1, 0)])
+    print(output)
 
-
+if __name__ == '__main__':
+    test()

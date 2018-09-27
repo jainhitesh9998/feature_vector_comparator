@@ -1,5 +1,6 @@
-from feature_vector.feature_vector import FeatureVector
 from random import randint
+
+from feature_vector_comparator.feature_vector.feature_vector import FeatureVector
 
 feature_vector = FeatureVector()
 for i in range(100):
