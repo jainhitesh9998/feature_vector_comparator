@@ -27,20 +27,27 @@ class Distance(Enum):
 
 class Comparator(object):
 
-    def __init__(self, input_size=128, hidden_layers = 2 , distance = Distance.ABSOLUTE, loss=0):
+    def __init__(self, input_size=128, hidden_layers = 2 , distance = Distance.ABSOLUTE, ref_model = None, test_model = None, loss=0):
 
         # self.__input_reference = self.__input_layer('reference_layer')
         # self.__input_test = self.__input_layer('test_layer')
         # assert (isinstance(distance, Enum))
+        self.__ref_model = ref_model
+        self.__test_model = test_model
         self.__model = None
         self.__input_size = input_size
-        self.__input_shape = (None, self.__input_size)
+        self.__input_shape = (self.__input_size,)
         self.__hidden_layers = hidden_layers
         self.__weight_decay = 0.0005
         self.__weight_init = "he_normal"
         print(distance)
         self.__comparator_layer = distance()
-
+        if ref_model is not None and test_model is not None:
+            self.__ref_input = ref_model.layers[0].input
+            self.__test_input = test_model.layers[0].input
+        else:
+            self.__ref_input = self.__input_layer('reference_layer')
+            self.__test_input = self.__input_layer('test_layer')
     def __input_layer(self, name='input'):
         return Input(shape=self.__input_shape, name=name)
 
@@ -54,8 +61,8 @@ class Comparator(object):
         return self.__model
 
     def __call__(self, *args, **kwargs):
-        input_reference = self.__input_layer('reference_layer')
-        input_test = self.__input_layer('test_layer')
+        # input_reference = self.__input_layer('reference_layer')
+        # input_test = self.__input_layer('test_layer')
         # ref_fc_layer1 = self.__fully_connected_layer(input_reference, neurons=256, name='ref_dense_layer1',
         #                                                   activation='relu')
         # test_fc_layer1 = self.__fully_connected_layer(input_test, neurons=256, name='test_dense_layer1',
@@ -63,9 +70,15 @@ class Comparator(object):
         # ref_fc_layer2 = self.__fully_connected_layer(ref_fc_layer1, neurons=128, name='ref_dense_layer2',
         #                                             activation='relu')
         # test_fc_layer2 = self.__fully_connected_layer(test_fc_layer1, neurons=128, name='test_dense_layer2',
-        #                                              activation='relu')
-        ref_layer = input_reference
-        test_layer = input_test
+        #
+        #                                          activation='relu')
+        if self.__ref_model is not None and self.__test_model is not None:
+            ref_layer = self.__ref_model.layers[-2].output
+            test_layer = self.__test_model.layers[-2].output
+        else:
+            ref_layer = self.__ref_input
+            test_layer = self.__test_input
+
         for l in range(self.__hidden_layers):
             ref_layer = self.__fully_connected_layer(ref_layer, neurons=(self.__hidden_layers - l) * self.__input_size , name='ref_dense_layer' + str(l+1),
                                                                                            activation='relu')
@@ -75,6 +88,6 @@ class Comparator(object):
         # comparator_layer = Lambda(lambda tensors: K.abs(K.square(tensors[0]) - K.square(tensors[1])))
         vector_distance = self.__comparator_layer([ref_layer, test_layer])
         prediction = Dense(units=1, activation='sigmoid', name='output')(vector_distance)
-        self.__model = Model(inputs=[input_reference, input_test], outputs=prediction)
+        self.__model = Model(inputs=[self.__ref_input, self.__test_input], outputs=prediction)
         return self.get_model()
 
