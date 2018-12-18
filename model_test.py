@@ -2,7 +2,7 @@ from keras.layers import Input, Dense, concatenate, Lambda
 from keras.models import Model
 from keras import backend as K
 
-from feature_vector_comparator.comparator.comparator import Comparator
+from comparator.comparator import Comparator
 
-model = Comparator()()
+model = Comparator( input_size=256)()
 model.summary()
