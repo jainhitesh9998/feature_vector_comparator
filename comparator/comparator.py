@@ -9,7 +9,7 @@ from enum import Enum
 
 
 def euclidian_distance():
-    return Lambda(lambda tensors: K.abs(K.square(tensors[0]) - K.square(tensors[1])))
+    return Lambda(lambda tensors: K.abs(K.sqrt(K.square(tensors[0]) - K.square(tensors[1]))))
 
 def cosine_distance():
     return Lambda(

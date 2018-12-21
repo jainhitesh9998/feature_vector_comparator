@@ -1,4 +1,8 @@
 import csv
+import os
+import numpy as np
+from feature_vector.feature_vector import FeatureVector
+
 
 def convert_int(x):
     try:
@@ -15,3 +19,18 @@ def read_csv(file_name):
             _ = [convert_int(x) for x in row]
             output_list.append(_)
     return output_list
+
+def make_features(path):
+    fv = FeatureVector()
+    # path = "/home/developer/Desktop/reid/market1501/dataset.csv"
+    print(os.path.isfile(path))
+    with open(path, 'r') as dataset:
+        data = csv.reader(dataset)
+        print()
+        for count, _ in enumerate(data):
+            print(count)
+            label = _[0]
+            vec = np.asarray(_[2:])
+            fv.add_vector(label, vec)
+    # print(len(fv))
+    return fv
