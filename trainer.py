@@ -116,6 +116,7 @@ def create_pair(vector):
 def train():
 
     config = tf.ConfigProto()
+    config.gpu_options.per_process_gpu_memory_fraction = True # GPU for multiple processes
     config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
     config.log_device_placement = True  # to log device placement (on which device the operation ran)
     # (nothing gets printed in Jupyter, only if you run it standalone)
@@ -146,7 +147,7 @@ def train():
     train_generator = generator(train_true_samples, train_false_samples, feature_vector, batch_size=1)
     validation_generator = generator(val_true_samples,val_false_samples, feature_vector, batch_size=1)
     epoch = 10
-    saved_weights_name = 'model.h5'
+    saved_weights_name = 'model_cosine.h5'
     early_stop = EarlyStopping(monitor='val_loss',
                                min_delta=0.001,
                                patience=3,
@@ -176,7 +177,7 @@ def train():
 
 def test():
     model = Comparator()()
-    model.load_weights('model.h5')
+    model.load_weights('model_.h5')
     model.summary()
     feature_vector = FeatureVector()
     session_runner = SessionRunner()
