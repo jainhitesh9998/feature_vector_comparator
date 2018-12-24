@@ -19,7 +19,7 @@ import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 count_0 = 0
 count_1 = 0
-
+import time
 
 def generator(true_sample, false_sample,feature_vector,  batch_size=1):
     # num_samples = len(samples)
@@ -130,7 +130,8 @@ def train():
     # print(feature_vector.get_vector_dict())
     true_sample = []
     false_sample = []
-    model = Comparator(input_size=2048, distance=Distance.EUCLIDIAN)()
+    # d = Distance.ABSOLUTE
+    model = Comparator(input_size=2048, distance=Distance.COSINE)()
     sklearn.utils.shuffle(key_pair)
     for kp in key_pair:
         if (kp[0] == kp[1]):
@@ -147,7 +148,8 @@ def train():
     train_generator = generator(train_true_samples, train_false_samples, feature_vector, batch_size=1)
     validation_generator = generator(val_true_samples,val_false_samples, feature_vector, batch_size=1)
     epoch = 10
-    saved_weights_name = 'model_cosine.h5'
+    saved_weights_name = 'model_' '' + time.strftime("%m_%d_%Y_%H_%M_%S") +'.h5'
+    print(saved_weights_name)
     early_stop = EarlyStopping(monitor='val_loss',
                                min_delta=0.001,
                                patience=3,
