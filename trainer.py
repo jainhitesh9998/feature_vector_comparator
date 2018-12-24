@@ -9,22 +9,28 @@ import os
 from collections import OrderedDict
 import itertools
 # from feature_extraction.mars_api.mars_api import MarsExtractorAPI
-from comparator.comparator import Comparator
+from comparator.comparator import Comparator, Distance
 import csv
 from feature_vector.feature_vector import FeatureVector
 # from tf_session.tf_session_runner import SessionRunner
 # from tf_session.tf_session_utils import Inference
 from utils.utils import make_features
-
+import tensorflow as tf
+from keras.backend.tensorflow_backend import set_session
 count_0 = 0
 count_1 = 0
 
 
-def generator(samples,feature_vector,  batch_size=1):
-    num_samples = len(samples)
+def generator(true_sample, false_sample,feature_vector,  batch_size=1):
+    # num_samples = len(samples)
     # print(len(samples))
+    true_pair = []
+    false_pair = []
     while True:
-        sklearn.utils.shuffle(samples)
+        sklearn.utils.shuffle(true_sample)
+        sklearn.utils.shuffle(false_sample)
+        samples = true_sample + false_sample[:len(true_sample)]
+        num_samples = len(samples)
         for offset in range(0, num_samples, batch_size):
             pair_list = samples[offset: offset+batch_size]
             # print(len(pair_list))
@@ -74,8 +80,8 @@ def permute(key_value, vector):
     samples = []
     for k1, k2 in key_value:
         # print("keys ", k1, k2)
-        val1 = vector[k1]
-        val2 = vector[k2]
+        val1 = sklearn.utils.shuffle(vector[k1])[:15]
+        val2 = sklearn.utils.shuffle(vector[k2])[:15]
         label = 0
         if k1 == k2:
             count_1 += 1
@@ -85,7 +91,6 @@ def permute(key_value, vector):
         sample = [[v1, v2, label] for v1, v2 in itertools.product(val1, val2)]
         samples.extend(sample)
     return samples
-
 
 def create_pair(vector):
     global count_0
@@ -109,20 +114,37 @@ def create_pair(vector):
 
 # if __name__ == '__main__':
 def train():
-    feature_vector = make_features("/home/developer/Desktop/reid/market1501/dataset.csv")
+
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
+    config.log_device_placement = True  # to log device placement (on which device the operation ran)
+    # (nothing gets printed in Jupyter, only if you run it standalone)
+    sess = tf.Session(config=config)
+    set_session(sess)  # set this TensorFlow session as the default session for Keras
+
+    feature_vector = make_features("/home/developer/Desktop/dataset.csv")
     key_pair = create_pair(feature_vector.get_vector_dict())
     # print(count_0)
     # print(count_1)
     # print(feature_vector.get_vector_dict())
-    model = Comparator(input_size=2048)()
+    true_sample = []
+    false_sample = []
+    model = Comparator(input_size=2048, distance=Distance.EUCLIDIAN)()
     sklearn.utils.shuffle(key_pair)
+    for kp in key_pair:
+        if (kp[0] == kp[1]):
+            true_sample.append(kp)
+        else:
+            false_sample.append(kp)
+
     # print()
     # print(samples[1])
     # print(len(samples))
-    train_samples, val_samples = train_test_split(key_pair, test_size=0.2)
+    train_true_samples, val_true_samples = train_test_split(true_sample, test_size=0.2)
+    train_false_samples, val_false_samples = train_test_split(false_sample, test_size=0.2)
 
-    train_generator = generator(train_samples, feature_vector, batch_size=1)
-    validation_generator = generator(val_samples, feature_vector, batch_size=1)
+    train_generator = generator(train_true_samples, train_false_samples, feature_vector, batch_size=1)
+    validation_generator = generator(val_true_samples,val_false_samples, feature_vector, batch_size=1)
     epoch = 10
     saved_weights_name = 'model.h5'
     early_stop = EarlyStopping(monitor='val_loss',
@@ -142,11 +164,11 @@ def train():
                               write_images=False)
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['mae', 'acc'])
     history = model.fit_generator(generator=train_generator,
-                        steps_per_epoch=len(train_samples),
+                        steps_per_epoch=len(train_true_samples)*2,
                         epochs=epoch,
                         verbose=1,
                         validation_data = validation_generator,
-                        nb_val_samples = len(val_samples),
+                        nb_val_samples = len(val_true_samples)*2,
                         callbacks=[early_stop, checkpoint, tensorboard]
                         )
     model.save_weights('new_weights.h5')
