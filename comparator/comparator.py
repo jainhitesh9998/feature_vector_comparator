@@ -3,17 +3,29 @@ from keras.models import Model
 from keras import backend as K
 from keras.regularizers import l2
 from enum import Enum
+from keras.utils import normalize
+
 
 # def enum(**enums):
 #     return type('Enum', (), enums)
 
 
 def euclidian_distance():
-    return Lambda(lambda tensors: K.abs(K.sqrt(K.square(tensors[0]) - K.square(tensors[1]))))
+    return Lambda(lambda tensors: K.sqrt(K.abs(K.square(tensors[0]) - K.square(tensors[1]))))
+    # return Lambda(lambda tensors: K.abs(K.square(tensors[0]) - K.square(tensors[1])))
+
+
+# def cosine_distance():
+#     return Lambda(
+#         lambda tensors: K.abs((K.dot(tensors[0], tensors[1])) / (K.square(tensors[0]) * K.square(tensors[1]))))
 
 def cosine_distance():
     return Lambda(
-        lambda tensors: K.abs((K.dot(tensors[0], tensors[1])) / (K.square(tensors[0]) * K.square(tensors[1]))))
+        # lambda tensors: K.abs(K.dot(normalize(tensors[0]), K.transpose(normalize(tensors[1]))))
+        lambda tensors: K.abs(
+            K.dot(tensors[0], tensors[1]) #/ (K.sqrt(K.sum(K.square(tensors[0]))) * K.sqrt(K.sum(K.square(tensors[1]))))
+        )
+    )
 
 def absolute_distance():
     return Lambda(lambda tensors: K.abs(tensors[0]- tensors[1]))

@@ -28,9 +28,14 @@ def make_features(path):
         data = csv.reader(dataset)
         print()
         for count, _ in enumerate(data):
-            print(count)
+            # print(count)
             label = _[0]
             vec = np.asarray(_[2:])
+            # print(len(vec))
+
+            if int(label) == -1 or int(label) > 751:
+                continue
             fv.add_vector(label, vec)
+    # print(fv.get_vector_dict().keys())
     # print(len(fv))
     return fv

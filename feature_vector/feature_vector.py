@@ -12,4 +12,3 @@ class FeatureVector:
 
     def get_vector_dict(self):
         return self.__vector_dict
-

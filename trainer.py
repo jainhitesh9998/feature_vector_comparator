@@ -6,6 +6,7 @@ import numpy as np
 import sklearn
 from sklearn.model_selection import train_test_split
 import os
+import random
 from collections import OrderedDict
 import itertools
 # from feature_extraction.mars_api.mars_api import MarsExtractorAPI
@@ -17,24 +18,51 @@ from feature_vector.feature_vector import FeatureVector
 from utils.utils import make_features
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
+import random
 count_0 = 0
 count_1 = 0
 import time
 
-def generator(true_sample, false_sample,feature_vector,  batch_size=1):
+def permute1(pairs, vector):
+    samples = []
+    # print("pairs")
+    # print(pairs)
+    for pair in pairs:
+        sample = []
+        sample.append(vector[pair[0][0]][pair[0][1]])
+        sample.append(vector[pair[1][0]][pair[1][1]])
+        if pair[0][0]==pair[1][0]:
+            sample.append(1)
+        else:
+            sample.append(0)
+        # print(sample)
+        samples.append(sample)
+    # print("len of samples", len(samples))
+    return samples
+
+def generator(true_sample, false_sample,feature_vector,  batch_size=16):
     # num_samples = len(samples)
     # print(len(samples))
     true_pair = []
     false_pair = []
+    # print(len(true_sample))
+    # print(len(false_sample))
     while True:
         sklearn.utils.shuffle(true_sample)
         sklearn.utils.shuffle(false_sample)
-        samples = true_sample + false_sample[:len(true_sample)]
+        # print(true_sample)
+        # print(len(true_sample))
+        # print(false_sample)
+        # print(len(false_sample))
+        samples = true_sample + false_sample
+        # print(samples)
         num_samples = len(samples)
-        for offset in range(0, num_samples, batch_size):
-            pair_list = samples[offset: offset+batch_size]
-            # print(len(pair_list))
-            batch_samples = permute(pair_list, feature_vector.get_vector_dict())
+        # print("number of samples", num_samples)
+        samples = sklearn.utils.shuffle(samples)
+        for offset in range(0, len(samples), batch_size):
+            batch_samples = permute1(samples[offset: offset+batch_size], feature_vector.get_vector_dict())
+            # print((batch_samples))
+            batch_samples = sklearn.utils.shuffle(batch_samples)
             input1 = []
             input2 = []
             labels = []
@@ -78,8 +106,11 @@ def permute(key_value, vector):
     global count_1
     # print(key_value)
     samples = []
+
     for k1, k2 in key_value:
         # print("keys ", k1, k2)
+        # print("len of k1", len(vector[k1]))
+        # print("len of k2", len(vector[k2]))
         val1 = sklearn.utils.shuffle(vector[k1])[:15]
         val2 = sklearn.utils.shuffle(vector[k2])[:15]
         label = 0
@@ -90,6 +121,7 @@ def permute(key_value, vector):
             count_0 += 1
         sample = [[v1, v2, label] for v1, v2 in itertools.product(val1, val2)]
         samples.extend(sample)
+    # print("len of samples", len(samples))
     return samples
 
 def create_pair(vector):
@@ -99,7 +131,6 @@ def create_pair(vector):
     key_pairs = [ _ for _ in itertools.combinations_with_replacement(keys, 2)]
     # print(key_pairs)
     return key_pairs
-
 
 # def extract_features(patch, ip, op):
 #     patch[0] = cv2.equalizeHist(patch[0])
@@ -123,30 +154,64 @@ def train():
     sess = tf.Session(config=config)
     set_session(sess)  # set this TensorFlow session as the default session for Keras
 
-    feature_vector = make_features("/home/developer/Desktop/dataset.csv")
-    key_pair = create_pair(feature_vector.get_vector_dict())
+    feature_vector = make_features("/home/developer/Desktop/mars_dataset.csv")
+    # print(feature_vector.get_vector_dict().keys())
+    # print(feature_vector.get_vector_dict()['741'])
+    # key_pair = create_pair(feature_vector.get_vector_dict())
+    # print("no. of keys", len(feature_vector.get_vector_dict().keys()))
+    # return
     # print(count_0)
     # print(count_1)
     # print(feature_vector.get_vector_dict())
     true_sample = []
     false_sample = []
     # d = Distance.ABSOLUTE
-    model = Comparator(input_size=2048, distance=Distance.COSINE)()
-    sklearn.utils.shuffle(key_pair)
-    for kp in key_pair:
-        if (kp[0] == kp[1]):
-            true_sample.append(kp)
-        else:
-            false_sample.append(kp)
+    model = Comparator(input_size=128, distance=Distance.EUCLIDIAN, hidden_layers=2)()
+    # sklearn.utils.shuffle(key_pair)
+    # for kp in key_pair:
+    #     if (kp[0] == kp[1]):
+    #         true_sample.append(kp)
+    #     else:
+    #         false_sample.append(kp)
+    # print("len of true sample", len(true_sample))
+    # print("len of false sample", len(false_sample))
+
+    all_classes = list(feature_vector.get_vector_dict().keys())
+    # print(all_classes)
+    num_of_classes  = len(all_classes)
+
+    for tr in all_classes:
+        tr_len = len(feature_vector.get_vector_dict()[tr])
+        for i in range(tr_len):
+            for j in range(tr_len):
+                true_sample.append([(tr, i), (tr, j)])
+
+    # print(true_sample[:50])
+    true_samples_len = len(true_sample)
+    false_per_class = int(true_samples_len/num_of_classes * 1.5)
+
+    for tr in all_classes:
+        for _ in range(false_per_class):
+            ref_class_image = random.randint(0,len(feature_vector.get_vector_dict()[tr])-1)
+            random_class = random.choice(all_classes)
+            if random_class!=tr:
+                random_class_image = random.randint(0,len(feature_vector.get_vector_dict()[random_class])-1)
+                false_sample.append([(tr, ref_class_image), (random_class, random_class_image)])
+
+    false_samples_len = len(false_sample)
+    # print(len(all_classes))
+    # print(true_samples_len)
+    # print(false_per_class)
+    # print(false_samples_len)
+    # print(false_sample[:50])
 
     # print()
     # print(samples[1])
     # print(len(samples))
     train_true_samples, val_true_samples = train_test_split(true_sample, test_size=0.2)
     train_false_samples, val_false_samples = train_test_split(false_sample, test_size=0.2)
-
-    train_generator = generator(train_true_samples, train_false_samples, feature_vector, batch_size=1)
-    validation_generator = generator(val_true_samples,val_false_samples, feature_vector, batch_size=1)
+    train_generator = generator(train_true_samples, train_false_samples, feature_vector, batch_size=32)
+    validation_generator = generator(val_true_samples,val_false_samples, feature_vector, batch_size=32)
     epoch = 10
     saved_weights_name = 'model_' '' + time.strftime("%m_%d_%Y_%H_%M_%S") +'.h5'
     print(saved_weights_name)
@@ -165,7 +230,7 @@ def train():
                               histogram_freq=0,
                               write_graph=True,
                               write_images=False)
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['mae', 'acc'])
+    model.compile(loss='mean_absolute_error', optimizer='adam', metrics=['mae', 'acc'])
     history = model.fit_generator(generator=train_generator,
                         steps_per_epoch=len(train_true_samples)*2,
                         epochs=epoch,
@@ -174,8 +239,7 @@ def train():
                         nb_val_samples = len(val_true_samples)*2,
                         callbacks=[early_stop, checkpoint, tensorboard]
                         )
-    model.save_weights('new_weights.h5')
-
+    # model.save_weights('new_weights.h5')
 
 def test():
     model = Comparator()()
